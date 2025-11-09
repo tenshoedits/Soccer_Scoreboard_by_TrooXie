@@ -142,7 +142,7 @@
   </div>
 
   <script>
-    const ws = new WebSocket("ws://localhost:8080");
+    const ws = new WebSocket("https://soccer-scoreboard-by-trooxie.onrender.com");
     let scoreboardState = { homeScore: 0, awayScore: 0 };
     
     ws.onmessage = e => {
@@ -265,4 +265,5 @@
     }
   </script>
 </body>
+
 </html>
