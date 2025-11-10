@@ -218,7 +218,11 @@ wss.on("connection", (ws, req) => {
     }
 
     if (!data.action) return;
-    
+    if (data.action === "keep_alive_ping") {
+        // Render günlüklerinde mesajın alındığını görmek için
+        console.log(`Board ${boardId} için Keep-Alive sinyali alındı.`); 
+        return; // İşlemi burada sonlandırır, aşağıdaki switch/case bloğu çalışmaz.
+    }
     let currentState = allScoreboards[boardId];
 
     switch (data.action) {
@@ -343,4 +347,5 @@ server.listen(PORT, () => {
   console.log(`Sunucu ${PORT} portunda çalışıyor.`);
 
 });
+
 
