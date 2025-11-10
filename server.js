@@ -7,10 +7,10 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// --- MERKEZİ DURUM YÖNETİMİ ---
-let allScoreboards = {}; // Anahtar: ID, Değer: Skorbord durumu.
-let allTimers = {}; // ID'ye özel sayaç aralıklarını tutar
-let activeConnections = {}; // Her ID'ye bağlı olan WebSocket bağlantılarını tutar.
+
+let allScoreboards = {}; 
+let allTimers = {}; 
+let activeConnections = {}; 
 
 const DEFAULT_STATE = {
   homeTeam: "Takım A",
@@ -90,7 +90,7 @@ function startTimer(id) {
     if (currentState.isTimerRunning) {
       currentState.timer++;
 
-      // Yarı sonu kontrolü
+      
       if (currentState.half === 1 && currentState.timer >= 45 * 60) {
         if (currentState.extra1 > 0) {
           stopAllTimers(id);
@@ -141,16 +141,16 @@ function resetAll(id) {
   allScoreboards[id] = JSON.parse(JSON.stringify(DEFAULT_STATE)); 
 }
 
-// --- EXPRESS ROUTING (Dinamik URL'ler) ---
+
 
 app.use(express.static(path.join(__dirname, "public")));
 
-// Ana Sayfa: index.html
+
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// Yeni Skorbord Oluşturma: /new
+
 app.get("/new", (req, res) => {
   let newId = generateRandomId();
   while (allScoreboards[newId]) { 
@@ -165,7 +165,7 @@ app.get("/new", (req, res) => {
   res.redirect(`/control/${newId}`); 
 });
 
-// Skorbord Görüntüleme Sayfası: /board/:id
+
 app.get("/board/:id", (req, res) => {
   const boardId = req.params.id;
   if (allScoreboards[boardId]) {
@@ -175,7 +175,7 @@ app.get("/board/:id", (req, res) => {
   }
 });
 
-// Kontrol Paneli Sayfası: /control/:id
+
 app.get("/control/:id", (req, res) => {
   const boardId = req.params.id;
   if (allScoreboards[boardId]) {
@@ -186,10 +186,10 @@ app.get("/control/:id", (req, res) => {
 });
 
 
-// --- WEB SOCKET BAĞLANTISI VE MESAJ İŞLEME ---
+
 
 wss.on("connection", (ws, req) => {
-  // Gelen isteğin URL'sinden ID'yi çıkar (örn: /a1b2c3d4)
+  
   const boardId = req.url.substring(1); 
   
   if (!boardId || !allScoreboards[boardId]) {
@@ -341,4 +341,5 @@ wss.on("connection", (ws, req) => {
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`Sunucu ${PORT} portunda çalışıyor.`);
+
 });
