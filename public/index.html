@@ -10,33 +10,86 @@
             background-color: #1e1e1e;
             color: white;
             display: flex;
-            justify-content: center;
-            align-items: center;
+            flex-direction: column; 
+            align-items: center; 
             min-height: 100vh;
             margin: 0;
+            padding: 50px 20px 30px 20px;
+            overflow-y: hidden; /* Dikey kaydırmayı engeller */
         }
-        .container {
-            background: #2a2a2a;
+        
+        /* Ana düzenleyici: Yan yana iki sütun için */
+        .main-content-wrapper {
+            display: flex;
+            gap: 30px;
+            width: 100%;
+            max-width: 1000px;
+            /* flex-grow: 1 kaldırıldı, artık dikey olarak genişlemeyecek */
+            margin-bottom: 30px; /* Footer'ı yukarı kaydırmak için 50px'ten 30px'e düşürüldü */
+        }
+        
+        /* Her iki sütunun (Skorbord ve Güncellemeler) ana kart stili */
+        .main-card-wrapper {
+            background: #2a2a2a; 
             padding: 30px;
             border-radius: 10px;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-            width: 90%;
-            max-width: 400px;
+        }
+        
+        /* SOL KART: SKORBORD YÖNETİM SİSTEMİ (flex: 1) */
+        .main-card-wrapper.left-card {
+            flex: 1; 
             text-align: center;
         }
+
+        /* SAĞ KART: GÜNCELLEMELER (flex: 2) */
+        .main-card-wrapper.right-card {
+            flex: 2; 
+            text-align: left;
+        }
+        .main-card-wrapper.right-card h1 {
+            text-align: center; 
+        }
+
         h1 {
             color: #00aaff;
             border-bottom: 2px solid #00aaff;
             padding-bottom: 10px;
             margin-bottom: 30px;
         }
-        .section {
+        h2 {
+            color: #00aaff;
+            margin-top: 0;
+        }
+        
+        /* İç bölümlerin stili */
+        .section, .inner-section {
             margin-bottom: 30px;
             padding: 20px;
             border: 1px solid #444;
             border-radius: 8px;
             background: #333;
         }
+        
+        /* Liste elemanları için uyumlu stil */
+        .inner-section ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .inner-section li {
+            margin-bottom: 8px;
+            padding-left: 15px;
+            position: relative;
+        }
+        .inner-section li::before {
+            content: '•';
+            color: #00aaff;
+            font-weight: bold;
+            display: inline-block;
+            width: 1em;
+            margin-left: -1em;
+        }
+        
         button {
             padding: 12px 20px;
             background: #007acc;
@@ -65,25 +118,102 @@
             margin-bottom: 10px;
             font-weight: bold;
         }
+        
+        /* ALT BİLGİ (FOOTER) STİLİ */
+        .site-footer {
+            width: 100%;
+            max-width: 1000px; 
+            padding: 20px;
+            background-color: #2a2a2a; 
+            color: #999; 
+            text-align: center;
+            border-top: 1px solid #444;
+            border-radius: 10px; 
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5); 
+            font-size: 0.9em;
+        }
+        .site-footer a {
+            color: #00aaff;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .site-footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Küçük ekranlar için düzenleme (mobil uyum) */
+        @media (max-width: 768px) {
+            .main-content-wrapper {
+                flex-direction: column; 
+                gap: 20px;
+            }
+            body {
+                /* Mobil cihazlarda içerik sığmayabileceği için kaydırmayı açıyoruz */
+                overflow-y: auto; 
+            }
+            .main-card-wrapper, .main-card-wrapper.left-card, .main-card-wrapper.right-card {
+                flex: 1; 
+                max-width: 100%; 
+            }
+            .main-card-wrapper.right-card {
+                 text-align: center;
+            }
+            .site-footer {
+                max-width: 100%;
+                border-radius: 0; 
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Skorbord Yönetim Sistemi</h1>
+    <div class="main-content-wrapper">
+        <div class="main-card-wrapper left-card">
+            <h1>Skorbord Yönetim Sistemi</h1>
 
-        <div class="section">
-            <h2>Yeni Skorbord Başlat</h2>
-            <p>Sizin için rastgele, benzersiz bir kontrol paneli ve OBS adresi oluşturulur.</p>
-            <button onclick="createNewScoreboard()">Yeni Başlat</button>
+            <div class="section">
+                <h2>Yeni Skorbord Başlat</h2>
+                <p>Sizin için rastgele, benzersiz bir kontrol paneli ve OBS adresi oluşturulur.</p>
+                <button onclick="createNewScoreboard()">Yeni Başlat</button>
+            </div>
+
+            <div class="section">
+                <h2>Mevcut Skorbordu Kullan</h2>
+                <label for="boardId">Daha Önce Oluşturduğunuz ID'yi Girin:</label>
+                <input type="text" id="boardId" placeholder="Örn: a1b2c3d4">
+                <button onclick="goToExistingScoreboard()">Devam Et</button>
+            </div>
         </div>
+        
+        <div class="main-card-wrapper right-card">
+            <h1>Güncellemeler</h1>
+            
+            <div class="inner-section">
+                <h2>⚙️ Patch Notları (v1.0.1)</h2>
+                <p>Son güncelleme ile gelen yenilikler ve düzeltmeler:</p>
+                <ul>
+                    <li>Performans iyileştirmeleri yapıldı ve sunucu yanıt süresi kısaltıldı.</li>
+                    <li>Mobil cihazlar için giriş ekranında küçük tasarım düzeltmeleri yapıldı.</li>
+                    <li>ID girişi boşken uyarı mesajı (alert) eklendi.</li>
+                </ul>
+            </div>
+            
+            <div class="inner-section">
+                <h2>🚀 Yakında Eklenecekler</h2>
+                <p>Gelecek güncellemelerle planlanan özellikler:</p>
+                <ul>
+                    <li>Takım isimleri için logo yükleme desteği.</li>
+                    <li>Farklı spor dallarına özel (Basketbol, Voleybol) skorboard şablonları.</li>
+                    <li>Sistem ayarlarını kaydetme ve geri yükleme (Database) özelliği.</li>
+                </ul>
+            </div>
 
-        <div class="section">
-            <h2>Mevcut Skorbordu Kullan</h2>
-            <label for="boardId">Daha Önce Oluşturduğunuz ID'yi Girin:</label>
-            <input type="text" id="boardId" placeholder="Örn: a1b2c3d4">
-            <button onclick="goToExistingScoreboard()">Devam Et</button>
         </div>
     </div>
+    
+    <footer class="site-footer">
+        <p>&copy; 2024 Skorbord Yönetim Sistemi. Tüm hakları saklıdır.</p>
+        <p>İletişim: <a href="mailto:contact.trooxie@gmail.com">contact.trooxie@gmail.com</a></p>
+    </footer>
 
     <script>
         function createNewScoreboard() {
