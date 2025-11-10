@@ -45,9 +45,6 @@ const DEFAULT_STATE = {
   scoreboardBgColor: "#141414",
   scoreboardOpacity: 1
 };
-app.get('/', (req, res) => {
-    res.status(200).send('Server is running and healthy.');
-});
 
 function generateRandomId() {
   return Math.random().toString(36).substring(2, 10);
