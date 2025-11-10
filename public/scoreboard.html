@@ -279,16 +279,16 @@
   </div>
 
   <script>
-    // --- YENİ KOD BAŞLANGICI: DİNAMİK BAĞLANTI ---
+    
     const renderUrl = "soccer-scoreboard-by-trooxie.onrender.com";
 
-    // 1. URL'den ID'yi alırız (Örn: /board/a1b2c3d4 => a1b2c3d4)
+    
     const pathSegments = window.location.pathname.split('/');
     const boardId = pathSegments[pathSegments.length - 1]; 
     
-    // Güvenli WebSocket bağlantısını ID'ye özel kurarız. wss://[adres]/[boardId]
+    
     const ws = new WebSocket(`wss://${renderUrl}/${boardId}`);
-    // --- YENİ KOD BİTİŞİ ---
+    
 
     const extraDisplay = document.getElementById("extraDisplay");
     const sponsorLogo = document.getElementById("sponsorLogo");
@@ -409,5 +409,6 @@
     };
   </script>
 </body>
+
 
 </html>
