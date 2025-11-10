@@ -8,7 +8,7 @@
     div { background: #2a2a2a; padding: 15px; border-radius: 8px; border: 1px solid #444; }
     h2, h3 { border-bottom: 2px solid #00aaff; padding-bottom: 5px; margin-top: 0; }
     input, button { margin:5px; padding:8px 12px; border-radius: 5px; border: 1px solid #555; background: #333; color: white; }
-    button { cursor: pointer; background: #007acc; border: none; font-weight: bold; }
+    button { cursor: pointer; background: #007acc; border: none; border-radius: 5px; font-weight: bold; transition: background 0.3s; }
     button.remove-btn { background: #cc0000; }
     button:hover { background: #005f99; }
     button.remove-btn:hover { background: #990000; }
@@ -19,11 +19,65 @@
     .opacity-container { display: flex; align-items: center; }
     .opacity-container label { margin-right: 5px; }
     .opacity-container input[type="range"] { width: 100px; }
+    
+    /* Yeni Kısımlar: OBS URL ve Bildirim */
+    #obs-url-section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        background: #1a1a1a;
+    }
+    #obsUrlDisplay {
+        font-family: 'Courier New', Courier, monospace;
+        background: #333;
+        padding: 10px;
+        border-radius: 4px;
+        overflow-x: auto;
+        white-space: nowrap;
+        user-select: none; /* Metnin seçilmesini engelle */
+    }
+    .blurred {
+        filter: blur(4px);
+        transition: filter 0.3s;
+    }
+    .blurred:hover {
+        filter: blur(0);
+    }
+    #notification {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background-color: #4CAF50;
+        color: white;
+        padding: 15px 25px;
+        border-radius: 5px;
+        z-index: 1000;
+        opacity: 0;
+        transition: opacity 0.5s, transform 0.5s;
+        transform: translateY(100%);
+    }
+    #notification.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
   </style>
 </head>
 <body>
   <h1>Skorbord Kontrol Paneli</h1>
 
+  <div id="obs-url-section">
+    <h3>OBS Tarayıcı Kaynağı URL'si</h3>
+    <p>Bu URL'yi OBS'deki "Tarayıcı" kaynağına kopyalayın. Gizlilik için farenizle üzerine gelene kadar URL bulanıktır.</p>
+    
+    <div id="obsUrlDisplay" class="blurred">
+        URL Yükleniyor...
+    </div>
+    
+    <button onclick="copyToClipboard('obsUrlDisplay')">
+        OBS URL'sini Kopyala
+    </button>
+  </div>
+  
   <div>
     <h3>Skorbord Görünürlüğü</h3>
     <button onclick="toggleScoreboard()">Skorbordu Gizle / Göster</button>
@@ -140,35 +194,63 @@
     <h3>Maçı Sıfırla</h3>
     <button onclick="sendAction('resetAll')" class="remove-btn">Tüm Maçı Sıfırla</button>
   </div>
+  
+  <div id="notification"></div>
 
   <script>
-    // --- YENİ KOD BAŞLANGICI: DİNAMİK BAĞLANTI ---
     const renderUrl = "soccer-scoreboard-by-trooxie.onrender.com";
     
-    // 1. URL'den ID'yi alırız (Örn: /control/a1b2c3d4 => a1b2c3d4)
+    // 1. URL'den ID'yi alma
     const pathSegments = window.location.pathname.split('/');
     const boardId = pathSegments[pathSegments.length - 1]; 
 
-    // Güvenli WebSocket bağlantısını ID'ye özel kurarız. wss://[adres]/[boardId]
+    // 2. OBS URL'sini oluşturma ve gösterme
+    const obsUrl = `${window.location.protocol}//${window.location.host}/board/${boardId}`;
+    document.getElementById("obsUrlDisplay").innerText = obsUrl;
+
+    // 3. WebSocket bağlantısı
     const ws = new WebSocket(`wss://${renderUrl}/${boardId}`);
-    // --- YENİ KOD BİTİŞİ ---
     
     let scoreboardState = { homeScore: 0, awayScore: 0 };
     
+    // Kopyalama ve Bildirim Fonksiyonları
+    function showNotification(message) {
+        const notification = document.getElementById('notification');
+        notification.innerText = message;
+        notification.classList.add('show');
+        
+        // 3 saniye sonra bildirimi gizle
+        setTimeout(() => {
+            notification.classList.remove('show');
+        }, 3000);
+    }
+
+    async function copyToClipboard(elementId) {
+        const textToCopy = document.getElementById(elementId).innerText;
+        try {
+            await navigator.clipboard.writeText(textToCopy);
+            showNotification('OBS URL’si başarıyla kopyalandı!');
+        } catch (err) {
+            console.error('Kopyalama başarısız oldu:', err);
+            showNotification('Kopyalama başarısız oldu. Lütfen manuel kopyalayın.');
+        }
+    }
+
     ws.onmessage = e => {
       const data = JSON.parse(e.data);
       if (data.action === "state" || data.action === "init") {
-          scoreboardState = data.state;
-          document.getElementById("scoreDisplay").innerText = `${scoreboardState.homeScore} - ${scoreboardState.awayScore}`;
+          const s = data.state;
+          scoreboardState = s;
+          document.getElementById("scoreDisplay").innerText = `${s.homeScore} - ${s.awayScore}`;
           
-          document.getElementById("timerBgColor").value = scoreboardState.timerBgColor;
-          document.getElementById("timerOpacity").value = scoreboardState.timerOpacity;
-          document.getElementById("teamBgColor").value = scoreboardState.teamBgColor;
-          document.getElementById("teamOpacity").value = scoreboardState.teamOpacity;
-          document.getElementById("extraTimeBgColor").value = scoreboardState.extraTimeBgColor;
-          document.getElementById("extraTimeOpacity").value = scoreboardState.extraTimeOpacity;
-          document.getElementById("scoreboardBgColor").value = scoreboardState.scoreboardBgColor;
-          document.getElementById("scoreboardOpacity").value = scoreboardState.scoreboardOpacity;
+          document.getElementById("timerBgColor").value = s.timerBgColor;
+          document.getElementById("timerOpacity").value = s.timerOpacity;
+          document.getElementById("teamBgColor").value = s.teamBgColor;
+          document.getElementById("teamOpacity").value = s.teamOpacity;
+          document.getElementById("extraTimeBgColor").value = s.extraTimeBgColor;
+          document.getElementById("extraTimeOpacity").value = s.extraTimeOpacity;
+          document.getElementById("scoreboardBgColor").value = s.scoreboardBgColor;
+          document.getElementById("scoreboardOpacity").value = s.scoreboardOpacity;
       }
     };
 
