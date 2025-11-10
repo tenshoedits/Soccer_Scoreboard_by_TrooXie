@@ -7,9 +7,12 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-app.use(express.static(path.join(__dirname, "public")));
+// --- MERKEZİ DURUM YÖNETİMİ ---
+let allScoreboards = {}; // Anahtar: ID, Değer: Skorbord durumu.
+let allTimers = {}; // ID'ye özel sayaç aralıklarını tutar
+let activeConnections = {}; // Her ID'ye bağlı olan WebSocket bağlantılarını tutar.
 
-let scoreboardState = {
+const DEFAULT_STATE = {
   homeTeam: "Takım A",
   awayTeam: "Takım B",
   homeColor: "#0066ff",
@@ -43,256 +46,299 @@ let scoreboardState = {
   scoreboardOpacity: 1
 };
 
-let mainTimerInterval;
-let extraTimeTimerInterval;
+function generateRandomId() {
+  return Math.random().toString(36).substring(2, 10);
+}
 
-function startTimer() {
-  if (scoreboardState.isTimerRunning) return;
-  scoreboardState.isTimerRunning = true;
-  broadcastState(); 
-  mainTimerInterval = setInterval(() => {
-    scoreboardState.timer++;
-    broadcastState();
+function broadcastState(id) {
+  if (!activeConnections[id] || !allScoreboards[id]) return;
+
+  const stateJson = JSON.stringify({ action: "state", state: allScoreboards[id] });
+  activeConnections[id].forEach(ws => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(stateJson);
+    }
+  });
+}
+
+function stopAllTimers(id) {
+  if (allTimers[id]) {
+    clearInterval(allTimers[id]);
+    delete allTimers[id];
+  }
+  if (allScoreboards[id]) {
+    allScoreboards[id].isTimerRunning = false;
+    allScoreboards[id].isExtraTimeRunning = false;
+  }
+}
+
+function startTimer(id) {
+  if (!allScoreboards[id]) return;
+  
+  const currentState = allScoreboards[id];
+  stopAllTimers(id);
+
+  currentState.isTimerRunning = true;
+  currentState.isExtraTimeRunning = false;
+
+  allTimers[id] = setInterval(() => {
+    if (!allScoreboards[id]) { 
+        stopAllTimers(id);
+        return;
+    }
     
-    const isFirstHalfEnd = scoreboardState.half === 1 && scoreboardState.timer >= 45 * 60;
-    const isSecondHalfEnd = scoreboardState.half === 2 && scoreboardState.timer >= 90 * 60;
+    if (currentState.isTimerRunning) {
+      currentState.timer++;
 
-    if (isFirstHalfEnd || isSecondHalfEnd) {
-      const extraTime = scoreboardState.half === 1 ? scoreboardState.extra1 : scoreboardState.extra2;
-      
-      if (extraTime > 0) {
-        clearInterval(mainTimerInterval);
-        scoreboardState.isTimerRunning = false;
-        startExtraTimeTimer(extraTime);
-      } else {
-        stopAllTimers();
+      // Yarı sonu kontrolü
+      if (currentState.half === 1 && currentState.timer >= 45 * 60) {
+        if (currentState.extra1 > 0) {
+          stopAllTimers(id);
+          startExtraTimeTimer(id, currentState.extra1 * 60);
+        } else {
+          stopAllTimers(id);
+        }
+      } else if (currentState.half === 2 && currentState.timer >= 90 * 60) {
+        if (currentState.extra2 > 0) {
+          stopAllTimers(id);
+          startExtraTimeTimer(id, currentState.extra2 * 60);
+        } else {
+          stopAllTimers(id);
+        }
       }
     }
+    broadcastState(id);
   }, 1000);
 }
 
-function startExtraTimeTimer(extra) {
-    if (scoreboardState.isExtraTimeRunning) return;
-    scoreboardState.isExtraTimeRunning = true;
-    scoreboardState.extra = extra;
-    broadcastState(); 
-    extraTimeTimerInterval = setInterval(() => {
-        scoreboardState.extraTimer++;
-        broadcastState();
-    }, 1000);
-}
+function startExtraTimeTimer(id, durationInSeconds) {
+  if (!allScoreboards[id]) return;
 
-function stopAllTimers() {
-  clearInterval(mainTimerInterval);
-  clearInterval(extraTimeTimerInterval);
-  scoreboardState.isTimerRunning = false;
-  scoreboardState.isExtraTimeRunning = false;
-  broadcastState();
-}
+  const currentState = allScoreboards[id];
+  stopAllTimers(id);
 
-function resetAll() {
-  stopAllTimers();
-  scoreboardState = {
-    homeTeam: "Takım A",
-    awayTeam: "Takım B",
-    homeColor: "#0066ff",
-    awayColor: "#ff3333",
-    homeLogo: "",
-    awayLogo: "",
-    homeLogoBgColor: "#ffffff",
-    awayLogoBgColor: "#ffffff",
-    sponsorLogo: "",
-    homeScore: 0,
-    awayScore: 0,
-    timer: 0,
-    half: 1,
-    isTimerRunning: false,
-    extra1: 0,
-    extra2: 0,
-    extraTimer: 0,
-    isExtraTimeRunning: false,
-    extra: 0,
-    isScoreboardVisible: true,
-    matchStatusMessage: "",
-    isStatusMessageVisible: false,
-    isStatusMessageAnimating: false,
-    timerBgColor: "#02271f",
-    timerOpacity: 1,
-    teamBgColor: "#033931",
-    teamOpacity: 1,
-    extraTimeBgColor: "#8B0000",
-    extraTimeOpacity: 1,
-    scoreboardBgColor: "#141414",
-    scoreboardOpacity: 1
-  };
-  broadcastState();
-}
-
-function broadcastState() {
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({ action: "state", state: scoreboardState }));
+  currentState.isExtraTimeRunning = true;
+  currentState.extraTimer = 0;
+  currentState.extra = durationInSeconds / 60; 
+  
+  allTimers[id] = setInterval(() => {
+    if (!allScoreboards[id]) {
+        stopAllTimers(id);
+        return;
     }
-  });
+    
+    currentState.extraTimer++;
+    if (currentState.extraTimer >= durationInSeconds) {
+      stopAllTimers(id);
+      currentState.isExtraTimeRunning = false;
+    }
+    broadcastState(id);
+  }, 1000);
 }
 
-wss.on("connection", (ws) => {
-  console.log("Client connected.");
-  ws.send(JSON.stringify({ action: "init", state: scoreboardState }));
+function resetAll(id) {
+  stopAllTimers(id);
+  allScoreboards[id] = JSON.parse(JSON.stringify(DEFAULT_STATE)); 
+}
 
-  ws.on("message", (message) => {
-    const data = JSON.parse(message);
-    switch (data.action) {
-      case "updateTeamNames":
-        scoreboardState.homeTeam = data.homeTeamName;
-        scoreboardState.awayTeam = data.awayTeamName;
-        broadcastState();
-        break;
-      case "updateColors":
-        scoreboardState.homeColor = data.homeColor;
-        scoreboardState.awayColor = data.awayColor;
-        broadcastState();
-        break;
-      case "updateBackgroundColors":
-        scoreboardState.timerBgColor = data.timerBgColor;
-        scoreboardState.timerOpacity = data.timerOpacity;
-        scoreboardState.teamBgColor = data.teamBgColor;
-        scoreboardState.teamOpacity = data.teamOpacity;
-        scoreboardState.extraTimeBgColor = data.extraTimeBgColor;
-        scoreboardState.extraTimeOpacity = data.extraTimeOpacity;
-        scoreboardState.scoreboardBgColor = data.scoreboardBgColor;
-        scoreboardState.scoreboardOpacity = data.scoreboardOpacity;
-        broadcastState();
-        break;
-      case "resetBackgroundColors":
-        scoreboardState.timerBgColor = "#02271f";
-        scoreboardState.timerOpacity = 1;
-        scoreboardState.teamBgColor = "#033931";
-        scoreboardState.teamOpacity = 1;
-        scoreboardState.extraTimeBgColor = "#8B0000";
-        scoreboardState.extraTimeOpacity = 1;
-        scoreboardState.scoreboardBgColor = "#141414";
-        scoreboardState.scoreboardOpacity = 1;
-        broadcastState();
-        break;
-      case "updateScores":
-        scoreboardState.homeScore = data.homeScore;
-        scoreboardState.awayScore = data.awayScore;
-        broadcastState();
-        break;
-      case "uploadLogo":
-        scoreboardState[data.team + "Logo"] = data.logo;
-        broadcastState();
-        break;
-      case "uploadSponsorLogo":
-        scoreboardState.sponsorLogo = data.logo;
-        broadcastState();
-        break;
-      case "removeSponsorLogo":
-        scoreboardState.sponsorLogo = "";
-        broadcastState();
-        break;
-      case "removeLogo":
-        scoreboardState[data.team + "Logo"] = "";
-        scoreboardState[data.team + "LogoBgColor"] = "#ffffff";
-        broadcastState();
-        break;
-      case "toggleTimer":
-        scoreboardState.isTimerRunning ? stopAllTimers() : startTimer();
-        break;
-      case "resetAll":
-        resetAll();
-        break;
-      case "setExtraTimes":
-        scoreboardState.extra1 = data.extra1 || 0;
-        scoreboardState.extra2 = data.extra2 || 0;
-        broadcastState();
-        break;
-      case "setManualTimer":
-        stopAllTimers();
-        scoreboardState.timer = ((data.minutes || 0) * 60) + (data.seconds || 0);
-        broadcastState();
-        break;
-      case "startSecondHalf":
-        stopAllTimers();
-        scoreboardState.half = 2;
-        scoreboardState.timer = 45 * 60;
-        scoreboardState.isExtraTimeRunning = false;
-        scoreboardState.extraTimer = 0;
-        scoreboardState.extra = 0;
-        broadcastState();
-        break;
-      case "startFirstHalf":
-        stopAllTimers();
-        scoreboardState.half = 1;
-        scoreboardState.timer = 0;
-        scoreboardState.isExtraTimeRunning = false;
-        scoreboardState.extraTimer = 0;
-        scoreboardState.extra = 0;
-        broadcastState();
-        break;
-      case "toggleScoreboard":
-        scoreboardState.isScoreboardVisible = !scoreboardState.isScoreboardVisible;
-        if (scoreboardState.matchStatusMessage !== "") {
-          scoreboardState.isStatusMessageAnimating = true;
-          setTimeout(() => {
-            scoreboardState.isStatusMessageAnimating = false;
-            broadcastState();
-          }, 500);
-        }
-        broadcastState();
-        break;
-      
-      case "showHalfTime":
-        scoreboardState.matchStatusMessage = "DEVRE ARASI";
-        scoreboardState.isStatusMessageVisible = true;
-        scoreboardState.isStatusMessageAnimating = true;
-        setTimeout(() => {
-            scoreboardState.isStatusMessageAnimating = false;
-            broadcastState();
-        }, 500);
-        broadcastState();
-        break;
-      case "showFullTime":
-        scoreboardState.matchStatusMessage = "MAÇ SONU";
-        scoreboardState.isStatusMessageVisible = true;
-        scoreboardState.isStatusMessageAnimating = true;
-        setTimeout(() => {
-            scoreboardState.isStatusMessageAnimating = false;
-            broadcastState();
-        }, 500);
-        broadcastState();
-        break;
-      case "hideStatusMessage":
-        scoreboardState.isStatusMessageVisible = false;
-        scoreboardState.isStatusMessageAnimating = true;
-        setTimeout(() => {
-            scoreboardState.matchStatusMessage = "";
-            scoreboardState.isStatusMessageAnimating = false;
-            broadcastState();
-        }, 500);
-        broadcastState();
-        break;
-        
-      case "resetExtraTime":
-        stopAllTimers();
-        scoreboardState.isExtraTimeRunning = false;
-        scoreboardState.extraTimer = 0;
-        scoreboardState.extra = 0;
-        broadcastState();
-        break;
-    }
-  });
+// --- EXPRESS ROUTING (Dinamik URL'ler) ---
 
-  ws.on("close", () => {
-    console.log("Client disconnected.");
-  });
-});
+app.use(express.static(path.join(__dirname, "public")));
 
+// Ana Sayfa: index.html
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-server.listen(8080, () => {
-  console.log("Server started on http://localhost:8080");
+// Yeni Skorbord Oluşturma: /new
+app.get("/new", (req, res) => {
+  let newId = generateRandomId();
+  while (allScoreboards[newId]) { 
+    newId = generateRandomId();
+  }
+  
+  allScoreboards[newId] = JSON.parse(JSON.stringify(DEFAULT_STATE));
+  activeConnections[newId] = [];
+  allTimers[newId] = null; 
+
+  console.log(`Yeni skorbord oluşturuldu: ID=${newId}`);
+  res.redirect(`/control/${newId}`); 
+});
+
+// Skorbord Görüntüleme Sayfası: /board/:id
+app.get("/board/:id", (req, res) => {
+  const boardId = req.params.id;
+  if (allScoreboards[boardId]) {
+    res.sendFile(path.join(__dirname, "public", "scoreboard.html"));
+  } else {
+    res.status(404).send("Hata: Bu Skorbord ID'si bulunamadı. Ana sayfaya dönün: <a href='/'>Başlangıç</a>");
+  }
+});
+
+// Kontrol Paneli Sayfası: /control/:id
+app.get("/control/:id", (req, res) => {
+  const boardId = req.params.id;
+  if (allScoreboards[boardId]) {
+    res.sendFile(path.join(__dirname, "public", "control.html"));
+  } else {
+    res.status(404).send("Hata: Bu Skorbord ID'si bulunamadı. Ana sayfaya dönün: <a href='/'>Başlangıç</a>");
+  }
+});
+
+
+// --- WEB SOCKET BAĞLANTISI VE MESAJ İŞLEME ---
+
+wss.on("connection", (ws, req) => {
+  // Gelen isteğin URL'sinden ID'yi çıkar (örn: /a1b2c3d4)
+  const boardId = req.url.substring(1); 
+  
+  if (!boardId || !allScoreboards[boardId]) {
+    console.log(`Bağlantı reddedildi: Geçersiz ID: ${boardId}`);
+    ws.close();
+    return;
+  }
+
+  if (!activeConnections[boardId]) {
+    activeConnections[boardId] = [];
+  }
+  activeConnections[boardId].push(ws);
+  
+  console.log(`İstemci bağlandı. ID: ${boardId}.`);
+
+  ws.send(JSON.stringify({ action: "init", state: allScoreboards[boardId] }));
+
+
+  ws.on("message", (message) => {
+    let data;
+    try {
+      data = JSON.parse(message);
+    } catch (e) {
+      console.error("Geçersiz JSON alındı:", message);
+      return;
+    }
+
+    if (!data.action) return;
+    
+    let currentState = allScoreboards[boardId];
+
+    switch (data.action) {
+      case "updateTeamNames":
+        currentState.homeTeam = data.homeTeamName;
+        currentState.awayTeam = data.awayTeamName;
+        break;
+      case "updateScores":
+        currentState.homeScore = data.homeScore;
+        currentState.awayScore = data.awayScore;
+        break;
+      case "updateColors":
+        currentState.homeColor = data.homeColor;
+        currentState.awayColor = data.awayColor;
+        break;
+      case "updateBackgroundColors":
+        currentState.timerBgColor = data.timerBgColor;
+        currentState.timerOpacity = data.timerOpacity;
+        currentState.teamBgColor = data.teamBgColor;
+        currentState.teamOpacity = data.teamOpacity;
+        currentState.extraTimeBgColor = data.extraTimeBgColor;
+        currentState.extraTimeOpacity = data.extraTimeOpacity;
+        currentState.scoreboardBgColor = data.scoreboardBgColor;
+        currentState.scoreboardOpacity = data.scoreboardOpacity;
+        break;
+      case "resetBackgroundColors":
+        currentState.timerBgColor = DEFAULT_STATE.timerBgColor;
+        currentState.timerOpacity = DEFAULT_STATE.timerOpacity;
+        currentState.teamBgColor = DEFAULT_STATE.teamBgColor;
+        currentState.teamOpacity = DEFAULT_STATE.teamOpacity;
+        currentState.extraTimeBgColor = DEFAULT_STATE.extraTimeBgColor;
+        currentState.extraTimeOpacity = DEFAULT_STATE.extraTimeOpacity;
+        currentState.scoreboardBgColor = DEFAULT_STATE.scoreboardBgColor;
+        currentState.scoreboardOpacity = DEFAULT_STATE.scoreboardOpacity;
+        break;
+      case "uploadLogo":
+        if (data.team === "home") currentState.homeLogo = data.logo;
+        else currentState.awayLogo = data.logo;
+        break;
+      case "removeLogo":
+        if (data.team === "home") currentState.homeLogo = "";
+        else currentState.awayLogo = "";
+        break;
+      case "uploadSponsorLogo":
+        currentState.sponsorLogo = data.logo;
+        break;
+      case "removeSponsorLogo":
+        currentState.sponsorLogo = "";
+        break;
+      case "toggleScoreboard":
+        currentState.isScoreboardVisible = !currentState.isScoreboardVisible;
+        break;
+      case "toggleTimer":
+        if (currentState.isExtraTimeRunning || currentState.isTimerRunning) {
+          stopAllTimers(boardId);
+        } else {
+          startTimer(boardId);
+        }
+        break;
+      case "resetTimer":
+        stopAllTimers(boardId);
+        currentState.timer = 0;
+        break;
+      case "setManualTimer":
+        stopAllTimers(boardId);
+        currentState.timer = (data.minutes * 60) + data.seconds;
+        break;
+      case "setExtraTimes":
+        currentState.extra1 = data.extra1;
+        currentState.extra2 = data.extra2;
+        break;
+      case "resetExtraTime":
+        stopAllTimers(boardId);
+        currentState.isExtraTimeRunning = false;
+        currentState.extraTimer = 0;
+        currentState.extra = 0;
+        break;
+      case "startFirstHalf":
+        stopAllTimers(boardId);
+        currentState.half = 1;
+        currentState.timer = 0;
+        break;
+      case "startSecondHalf":
+        stopAllTimers(boardId);
+        currentState.half = 2;
+        currentState.timer = 45 * 60;
+        break;
+      case "showHalfTime":
+        stopAllTimers(boardId);
+        currentState.matchStatusMessage = "DEVRE ARASI";
+        currentState.isStatusMessageVisible = true;
+        break;
+      case "showFullTime":
+        stopAllTimers(boardId);
+        currentState.matchStatusMessage = "MAÇ SONU";
+        currentState.isStatusMessageVisible = true;
+        break;
+      case "hideStatusMessage":
+        currentState.isStatusMessageVisible = false;
+        currentState.matchStatusMessage = "";
+        break;
+      case "resetAll":
+        resetAll(boardId);
+        break;
+    }
+
+    broadcastState(boardId);
+  });
+
+  ws.on("close", () => {
+    activeConnections[boardId] = activeConnections[boardId].filter(conn => conn !== ws);
+    console.log(`İstemci bağlantısı kesildi. ID: ${boardId}.`);
+    
+    if (activeConnections[boardId].length === 0) {
+        stopAllTimers(boardId);
+    }
+  });
+});
+
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, () => {
+  console.log(`Sunucu ${PORT} portunda çalışıyor.`);
 });
