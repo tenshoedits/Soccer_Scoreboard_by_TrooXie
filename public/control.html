@@ -355,10 +355,20 @@
     function toggleScoreboard() {
         ws.send(JSON.stringify({ action: "toggleScoreboard" }));
     }
+    ws.onopen = () => {
+    
+    
+    setInterval(() => {
+        
+        ws.send(JSON.stringify({ boardId: boardId, action: "keep_alive_ping" }));
+        console.log("Keep-Alive Ping gönderildi.");
+    }, 600000); 
+};
   </script>
 </body>
 
 </html>
+
 
 
 
