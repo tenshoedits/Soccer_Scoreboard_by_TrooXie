@@ -20,7 +20,7 @@
     .opacity-container label { margin-right: 5px; }
     .opacity-container input[type="range"] { width: 100px; }
     
-    /* Yeni Kısımlar: OBS URL ve Bildirim */
+    
     #obs-url-section {
         display: flex;
         flex-direction: column;
@@ -34,7 +34,7 @@
         border-radius: 4px;
         overflow-x: auto;
         white-space: nowrap;
-        user-select: none; /* Metnin seçilmesini engelle */
+        user-select: none; 
     }
     .blurred {
         filter: blur(4px);
@@ -200,26 +200,26 @@
   <script>
     const renderUrl = "soccer-scoreboard-by-trooxie.onrender.com";
     
-    // 1. URL'den ID'yi alma
+    
     const pathSegments = window.location.pathname.split('/');
     const boardId = pathSegments[pathSegments.length - 1]; 
 
-    // 2. OBS URL'sini oluşturma ve gösterme
+    
     const obsUrl = `${window.location.protocol}//${window.location.host}/board/${boardId}`;
     document.getElementById("obsUrlDisplay").innerText = obsUrl;
 
-    // 3. WebSocket bağlantısı
+    
     const ws = new WebSocket(`wss://${renderUrl}/${boardId}`);
     
     let scoreboardState = { homeScore: 0, awayScore: 0 };
     
-    // Kopyalama ve Bildirim Fonksiyonları
+    
     function showNotification(message) {
         const notification = document.getElementById('notification');
         notification.innerText = message;
         notification.classList.add('show');
         
-        // 3 saniye sonra bildirimi gizle
+        
         setTimeout(() => {
             notification.classList.remove('show');
         }, 3000);
@@ -359,3 +359,4 @@
 </body>
 
 </html>
+
